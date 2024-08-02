@@ -1206,7 +1206,7 @@ public class Serializer
             for (T serializable : values)
             {
                 if (isReference) this.reference(serializable, clazz);
-                else serializable.serialize(this);
+                else this.struct(serializable, clazz);
             }
             return values;
         }
@@ -1246,7 +1246,7 @@ public class Serializer
             for (T serializable : values)
             {
                 if (isReference) this.reference(serializable, clazz);
-                else serializable.serialize(this);
+                else this.struct(serializable, clazz);
             }
             return values;
         }

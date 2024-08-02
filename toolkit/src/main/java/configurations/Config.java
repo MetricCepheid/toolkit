@@ -21,6 +21,7 @@ public class Config
     public int currentProfile = 0;
 
     public boolean isDebug = false;
+    public String ps3IpAddress = "127.0.0.1";
     public boolean useLegacyFileDialogue = !CwlibConfiguration.IS_WINDOWS;
     public boolean displayWarningOnDeletingEntry = true;
     public boolean displayWarningOnZeroEntry = true;

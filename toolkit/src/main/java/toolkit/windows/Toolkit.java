@@ -438,6 +438,8 @@ public class Toolkit extends javax.swing.JFrame
                             this.entryContext);
                     }
 
+                    Swing.createMenuItem("Render Icon on PS3", "Requests a render for this item from the PS3", PusherCallbacks::getItemRender, this.entryContext);
+
                     if (ApplicationFlags.CAN_USE_3D)
                     {
                         try
@@ -519,6 +521,7 @@ public class Toolkit extends javax.swing.JFrame
                 }
                 case MESH:
                 {
+                    Swing.createMenuItem("Render Icon on PS3", "Requests a render for this item from the PS3", PusherCallbacks::getItemRender, this.entryContext);
                     if (Config.instance.enable3D)
                     {
                         Swing.createMenuItem(
@@ -527,6 +530,11 @@ public class Toolkit extends javax.swing.JFrame
                             LoadCallbacks::loadModel3D,
                             this.entryContext);
                     }
+                    break;
+                }
+                case GFX_MATERIAL:
+                {
+                    Swing.createMenuItem("Render Icon on PS3", "Requests a render for this item from the PS3", PusherCallbacks::getItemRender, this.entryContext);
                     break;
                 }
             }

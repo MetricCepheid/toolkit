@@ -214,7 +214,7 @@ public class RGfxMaterial implements Resource
                         }
 
                         if (offset != code.length)
-                            code = Arrays.copyOfRange(code, offset, code.length);
+                            this.code = Arrays.copyOfRange(code, offset, code.length);
                     }
                 }
                 else
