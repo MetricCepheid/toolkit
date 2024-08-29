@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
@@ -1718,84 +1719,67 @@ public class RMesh implements Resource
     public void calculateBoundBoxes(boolean setOBB)
     {
         Vector3f[] vertices = this.getVertices();
-        Vector4f[] weights = this.getWeights();
         byte[][] joints = this.getJoints();
 
-        HashMap<Bone, Vector3f> minVert = new HashMap<>();
-        HashMap<Bone, Vector3f> maxVert = new HashMap<>();
+        HashMap<Bone, Vector4f> minVert = new HashMap<>();
+        HashMap<Bone, Vector4f> maxVert = new HashMap<>();
 
         for (Bone bone : this.bones)
         {
-            minVert.put(bone, new Vector3f(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY,
-                Float.POSITIVE_INFINITY));
-            maxVert.put(bone, new Vector3f(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY,
-                Float.NEGATIVE_INFINITY));
+            minVert.put(bone, new Vector4f(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, 1.0f));
+            maxVert.put(bone, new Vector4f(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, 1.0f));
         }
 
         for (int i = 0; i < vertices.length; ++i)
         {
             Vector3f v = vertices[i];
-            Vector4f weightCache = weights[i];
             byte[] jointCache = joints[i];
-
             for (int j = 0; j < 4; ++j)
             {
-                if (weightCache.get(j) == 0.0f) continue;
-                Vector3f max = maxVert.get(this.bones[jointCache[j]]);
-                Vector3f min = minVert.get(this.bones[jointCache[j]]);
+                Vector4f local = new Vector4f(v, 1.0f).mul(this.bones[jointCache[j]].invSkinPoseMatrix);
+                Vector4f max = maxVert.get(this.bones[jointCache[j]]);
+                Vector4f min = minVert.get(this.bones[jointCache[j]]);
 
-
-                if (v.x > max.x) max.x = v.x;
-                if (v.y > max.y) max.y = v.y;
-                if (v.z > max.z) max.z = v.z;
-
-                if (v.x < min.x) min.x = v.x;
-                if (v.y < min.y) min.y = v.y;
-                if (v.z < min.z) min.z = v.z;
+                max = max.max(local);
+                min = min.min(local);
             }
         }
 
-        int index = 0;
-        for (Bone bone : this.bones)
+        for (int i = 0; i < this.bones.length; ++i)
         {
-            Vector4f max = new Vector4f(maxVert.get(bone), 1.0f);
-            Vector4f min = new Vector4f(minVert.get(bone), 1.0f);
+            Bone bone = this.bones[i];
+            CullBone culler = this.cullBones[i];
 
-            if (min.x == Float.POSITIVE_INFINITY) min = new Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
-            else min.mul(bone.invSkinPoseMatrix);
+            Vector4f max = maxVert.get(bone);
+            Vector4f min = minVert.get(bone);
 
-
-            if (max.x == Float.NEGATIVE_INFINITY) max = new Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
-            else max.mul(bone.invSkinPoseMatrix);
-
-            for (int c = 0; c < 3; ++c)
+            if (min.x == Float.POSITIVE_INFINITY || max.x == Float.NEGATIVE_INFINITY)
             {
-                if (min.get(c) > max.get(c))
-                {
-                    float u = min.get(c);
-                    float l = max.get(c);
-                    min.setComponent(c, l);
-                    max.setComponent(c, u);
-                }
+                bone.boundBoxMin = new Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
+                bone.boundBoxMax = new Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
+                bone.boundSphere = new Vector4f().zero();
+
+                culler.boundBoxMin = bone.boundBoxMin;
+                culler.boundBoxMax = bone.boundBoxMax;
+                culler.invSkinPoseMatrix = bone.invSkinPoseMatrix;
+
+                continue;
             }
 
-            bone.boundBoxMax = max;
             bone.boundBoxMin = min;
+            bone.boundBoxMax = max;
             if (setOBB)
             {
-                bone.obbMax = bone.boundBoxMax;
                 bone.obbMin = bone.boundBoxMin;
+                bone.obbMax = bone.boundBoxMax;
             }
+            
+            Vector4f sphere = max.add(min, new Vector4f()).div(2.0f);
+            sphere.w = Math.abs((max.sub(min, new Vector4f()).length() + 0.001f) / 2.0f);
+            bone.boundSphere = sphere;
 
-            Vector4f center = max.add(min, new Vector4f()).div(2.0f);
-            float minDist = Math.abs(center.distance(min));
-            float maxDist = Math.abs(center.distance(max));
-            center.w = (minDist > maxDist) ? minDist : maxDist;
-            bone.boundSphere = new Vector4f(center);
-
-            CullBone culler = this.cullBones[index++];
-            culler.boundBoxMax = bone.boundBoxMax;
             culler.boundBoxMin = bone.boundBoxMin;
+            culler.boundBoxMax = bone.boundBoxMax;
             culler.invSkinPoseMatrix = bone.invSkinPoseMatrix;
         }
     }

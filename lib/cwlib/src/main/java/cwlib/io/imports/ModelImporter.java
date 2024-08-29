@@ -8,7 +8,6 @@ import cwlib.io.streams.MemoryInputStream.SeekMode;
 import cwlib.io.streams.MemoryOutputStream;
 import cwlib.resources.RMesh;
 import cwlib.resources.custom.RBoneSet;
-import cwlib.singleton.ResourceSystem;
 import cwlib.structs.custom.Skeleton;
 import cwlib.structs.mesh.Bone;
 import cwlib.structs.mesh.Primitive;
@@ -71,9 +70,6 @@ public class ModelImporter
 
     private final Vector2f minUV = new Vector2f(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY);
     private final Vector2f maxUV = new Vector2f(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY);
-
-    private final HashMap<Bone, Vector3f> minVert = new HashMap<>();
-    private final HashMap<Bone, Vector3f> maxVert = new HashMap<>();
 
     private final HashMap<MaterialModel, Primitive> gltfMaterials = new HashMap<>();
 
@@ -224,6 +220,10 @@ public class ModelImporter
 
     private void addMesh(MeshModel mesh, SkinModel skin, ArrayList<String> targetNames)
     {
+        // Matrix4f vertexMatrix = new Matrix4f()
+        //     .identity()
+        //     .translationRotateScale(config.vertexOffset, new Quaternionf().identity(), new Vector3f(config.vertexScale));
+
         for (MeshPrimitiveModel meshPrimitive : mesh.getMeshPrimitiveModels())
         {
             int numVertices = meshPrimitive.getAttributes().get("POSITION").getCount();
@@ -294,11 +294,12 @@ public class ModelImporter
             {
                 Map<String, AccessorModel> target = targets.get(i);
                 if (target.containsKey("POSITION"))
-                    targetPositions[i] =
-                        target.get("POSITION").getAccessorData().createByteBuffer();
+                    targetPositions[i] = target.get("POSITION").getAccessorData().createByteBuffer();
+                else throw new RuntimeException("A morph stream is missing position accessors!");
+
                 if (target.containsKey("NORMAL"))
-                    targetNormals[i] =
-                        target.get("NORMAL").getAccessorData().createByteBuffer();
+                    targetNormals[i] = target.get("NORMAL").getAccessorData().createByteBuffer();
+                else throw new RuntimeException("A morph stream is missing normal accessors!");
             }
 
             int[] jointCache = new int[4];
@@ -332,27 +333,10 @@ public class ModelImporter
                     }
                 }
 
-                // Update min/max for bones
-                for (int j = 0; j < 4; ++j)
-                {
-                    if (weightCache[j] == 0.0f) continue;
-                    Vector3f max = this.maxVert.get(this.bones[jointCache[j]]);
-                    Vector3f min = this.minVert.get(this.bones[jointCache[j]]);
-                    Vector3f v = vertexCache[i];
-
-                    if (v.x > max.x) max.x = v.x;
-                    if (v.y > max.y) max.y = v.y;
-                    if (v.z > max.z) max.z = v.z;
-
-                    if (v.x < min.x) min.x = v.x;
-                    if (v.y < min.y) min.y = v.y;
-                    if (v.z < min.z) min.z = v.z;
-                }
-
                 int scale = (weightCache[1] != 0.0f) ? 0xFE : 0xFF;
-                skinningStream.u8(Math.round(weightCache[2] * scale));
-                skinningStream.u8(Math.round(weightCache[1] * scale));
-                skinningStream.u8(Math.round(weightCache[0] * scale));
+                skinningStream.u8((int)(weightCache[2] * scale));
+                skinningStream.u8((int)(weightCache[1] * scale));
+                skinningStream.u8((int)(weightCache[0] * scale));
 
                 skinningStream.u8(jointCache[0]);
 
@@ -379,7 +363,7 @@ public class ModelImporter
 
                 skinningStream.u8(jointCache[2]);
 
-                skinningStream.u24(0); // Don't know what a smooth normal is
+                skinningStream.u24(Bytes.packNormal24(normal)); // Don't know what a smooth normal is
 
                 skinningStream.u8(jointCache[3]);
 
@@ -415,20 +399,13 @@ public class ModelImporter
                     Vector3f vertex = new Vector3f(
                         targetPosition.getFloat(),
                         targetPosition.getFloat(),
-                        targetPosition.getFloat()
-                    );
-
-                    vertex.mul(this.config.vertexScale);
-                    vertex.add(this.config.vertexOffset);
-
+                        targetPosition.getFloat())
+                        .mul(this.config.vertexScale)
+                        .add(this.config.vertexOffset);
+                        
+                    Vector3f vertexNormal = new Vector3f(targetNormal.getFloat(), targetNormal.getFloat(), targetNormal.getFloat()).add(normal);
                     targetStream.v3(vertex);
-
-                    if (targetNormal != null)
-                    {
-                        normal.add(targetNormal.getFloat(), targetNormal.getFloat(),
-                            targetNormal.getFloat());
-                        targetStream.i32(Bytes.packNormal32(normal));
-                    }
+                    targetStream.i32(Bytes.packNormal32(vertexNormal));
                 }
             }
 
@@ -443,7 +420,6 @@ public class ModelImporter
             }
 
             String materialName = meshPrimitive.getMaterialModel().getName();
-            System.out.println(materialName);
             ResourceDescriptor descriptor = null;
             if (this.config.materialOverrides != null && this.config.materialOverrides.containsKey(materialName))
                 descriptor = this.config.materialOverrides.get(materialName);
@@ -549,12 +525,8 @@ public class ModelImporter
     public RMesh getMesh()
     {
         if (!hasTangents())
-            ResourceSystem.println("ModelImporter", "Model is missing tangents, this will " +
-                                                    "cause " +
-                                                    "issues with normals! Please re-export " +
-                                                    "model with tangents.");
-
-
+            throw new RuntimeException("Model is missing tangents, this will cause issues with normals! Please re-export model with tangents!");
+        
         Skeleton skeleton = null;
         if (this.config.skeleton != null)
         {
@@ -563,38 +535,18 @@ public class ModelImporter
         }
         else this.getCustomSkeleton();
 
-        for (Bone bone : this.bones)
-        {
-            this.minVert.put(bone, new Vector3f(Float.POSITIVE_INFINITY,
-                Float.POSITIVE_INFINITY,
-                Float.POSITIVE_INFINITY));
-            this.maxVert.put(bone, new Vector3f(Float.NEGATIVE_INFINITY,
-                Float.NEGATIVE_INFINITY,
-                Float.NEGATIVE_INFINITY));
-        }
-
         for (int i = 0; i < this.bones.length; ++i)
             this.jointLookup.put(this.bones[i].getName(), i);
 
         int totalVertCount = this.getTotalVertexCount();
         if (totalVertCount >= 0xFFFF)
-        {
-            ResourceSystem.println("ModelImporter", "Max vertex count is 65,535, can't " +
-                                                    "import " +
-                                                    "model!");
-            return null;
-        }
+            throw new RuntimeException("Max vertex count is 65,535, can't import model!");
 
         this.attributeCount = this.getMaxAttributeCount();
-        System.out.println("UV Count: " + this.attributeCount);
         this.morphCount = this.getMaxMorphCount();
 
         if (this.morphCount >= RMesh.MAX_MORPHS)
-        {
-            ResourceSystem.println("ModelImporter", "Max morph count is 32, can't import " +
-                                                    "model!");
-            return null;
-        }
+            throw new RuntimeException("Max morph count is 32, can't import model!");
 
         this.vertexStreams[RMesh.STREAM_POS_BONEINDICES] =
             new MemoryOutputStream(totalVertCount * 0x10);

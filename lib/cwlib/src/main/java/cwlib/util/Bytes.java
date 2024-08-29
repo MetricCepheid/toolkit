@@ -425,9 +425,9 @@ public final class Bytes
         if (normal == null)
             throw new NullPointerException("Can't pack null vertex normal!");
 
-        int x = Math.round(normal.x * 0x3ff) & 0x7ff;
-        int y = Math.round(normal.y * 0x3ff) & 0x7ff;
-        int z = Math.round(normal.z * 0x1ff) & 0x3ff;
+        int x = (int)(normal.x * 0x3ff) & 0x7ff;
+        int y = (int)(normal.y * 0x3ff) & 0x7ff;
+        int z = (int)(normal.z * 0x1ff) & 0x3ff;
 
         return (x | (y << 11) | (z << 22));
     }
@@ -443,8 +443,8 @@ public final class Bytes
         if (normal == null)
             throw new NullPointerException("Can't pack null vertex normal!");
 
-        int x = Math.round(normal.x * 0x7ff) & 0xfff;
-        int y = Math.round(normal.y * 0x3ff) & 0x7ff;
+        int x = (int)(normal.x * 0x7ff) & 0xfff;
+        int y = (int)(normal.y * 0x3ff) & 0x7ff;
         int z = (normal.z < 0) ? 1 : 0;
 
         return (x | (y << 12) | (z << 23));
