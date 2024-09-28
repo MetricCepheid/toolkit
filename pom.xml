@@ -17,6 +17,7 @@
         <module>tools/jsoninator</module>
         <module>tools/descriptor</module>
         <module>tools/meshimporter</module>
+        <module>tools/unlockall</module>
 
         <module>toolkit</module>
     </modules>
