@@ -19,6 +19,7 @@ import cwlib.resources.RPlan;
 import cwlib.resources.RTranslationTable;
 import cwlib.singleton.ResourceSystem;
 import cwlib.singleton.ResourceSystem.ResourceLogLevel;
+import cwlib.structs.inventory.InventoryItemDetails;
 import cwlib.structs.profile.InventoryItem;
 import cwlib.types.SerializedResource;
 import cwlib.types.archives.Fart;
@@ -68,7 +69,7 @@ public class RestlessPopulator
     public static void main(String[] args) 
     {
         ResourceSystem.LOG_LEVEL = ResourceLogLevel.NONE;
-        
+
         if (args.length != 2)
         {
             System.out.println("java -jar unlockall.jar <littlefart> <game usrdir>");
@@ -162,12 +163,12 @@ public class RestlessPopulator
         // let's just walk through the directories.
         try (Stream<Path> stream = Files.walk(GameDirectory.toPath()))
         {
-            List<String> collect = stream
+            List<String> files = stream
                 .map(String::valueOf)
                 .sorted()
                 .collect(Collectors.toList());
 
-            for (String path : collect)
+            for (String path : files)
             {
                 File file = new File(path);
                 if (file.isFile() && file.getName().toLowerCase().endsWith(".farc"))
@@ -288,10 +289,20 @@ public class RestlessPopulator
             }
 
             // Don't bother adding plans with invalid data
-            if (plan.inventoryData == null) continue;
-            if (plan.inventoryData.icon == null) continue;
-            if (plan.inventoryData.type.isEmpty() || plan.inventoryData.toolType != ToolType.NONE) continue;
-            if (plan.inventoryData.type.contains(InventoryObjectType.PLAYER_COLOUR)) continue;
+            InventoryItemDetails details = plan.inventoryData;
+            if (details == null) continue;
+            if (details.icon == null) continue;
+
+            // Don't want extra of the default items in your inventory
+            if (details.type.isEmpty() || plan.inventoryData.toolType != ToolType.NONE) continue;
+            if (details.type.contains(InventoryObjectType.PLAYER_COLOUR)) continue;
+            
+            // No community objects!
+            if (details.type.contains(InventoryObjectType.USER_OBJECT)) continue;
+
+            // It's probably safe to ignore any non-background without a category
+            // (I'm fairly sure backgrounds don't have categories, but I'm too lazy to check)
+            if (!details.type.contains(InventoryObjectType.BACKGROUND) && details.category == 0) continue;
 
             local.addItem(plan, new ResourceDescriptor(row.getGUID(), ResourceType.PLAN), table);
         }
